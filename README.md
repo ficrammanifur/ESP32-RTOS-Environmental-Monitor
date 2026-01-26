@@ -439,27 +439,46 @@ graph TD
 ### 3. Core 1 - IoT Task (Every 15 seconds)
 
 ```mermaid
-graph TD
-    A["🔶 IOT TASK START<br/>Core 1 - Priority 1"] --> B["📦 Queue Receive<br/>xQueueReceive timeout"]
-    B --> C{📦 Data<br/>Received?}
-    C -->|Yes| D["🌐 Check WiFi<br/>WiFi.status()"]
-    C -->|No| Z["⏭️ Skip Cycle"]
-    D --> E{WiFi<br/>Connected?}
-    E -->|No| F["⚠️ Log WiFi Error"]
-    E -->|Yes| G["🔑 Get API Key<br/>From EEPROM"]
+flowchart TD
+    A["🔶 IOT TASK START<br/>Core 1 - Priority 1"]
+    B["📦 Queue Receive<br/>xQueueReceive timeout"]
+    C{📦 Data<br/>Received?}
+    D["🌐 Check WiFi<br/>WiFi.status()"]
+    E{WiFi<br/>Connected?}
+    F["⚠️ Log WiFi Error"]
+    G["🔑 Get API Key<br/>From EEPROM"]
+    H["🔗 Build ThingSpeak URL<br/>4 Fields + Value"]
+    I["📡 HTTP Client Begin<br/>GET Request"]
+    J["⏱️ Send HTTP Request<br/>Start Timer"]
+    K{HTTP<br/>Response OK?}
+    L["✅ Entry ID Received"]
+    M["❌ Log Error<br/>Try Next Cycle"]
+    N["🔗 HTTP End<br/>Close Connection"]
+    O["🖨️ Print Result<br/>Serial Monitor"]
+    Z["⏭️ Skip Cycle"]
+    P["😴 vTaskDelay 15000ms"]
+    Q["🔄 Loop Back"]
+    
+    A --> B
+    B --> C
+    C -->|Yes| D
+    C -->|No| Z
+    D --> E
+    E -->|No| F
+    E -->|Yes| G
     F --> Z
-    G --> H["🔗 Build ThingSpeak URL<br/>4 Fields + Value"]
-    H --> I["📡 HTTP Client Begin<br/>GET Request"]
-    I --> J["⏱️ Send HTTP Request<br/>Start Timer"]
-    J --> K{HTTP<br/>Response OK?}
-    K -->|200| L["✅ Entry ID Received"]
-    K -->|Fail| M["❌ Log Error<br/>Try Next Cycle"]
-    L --> N["🔗 HTTP End<br/>Close Connection"]
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    K -->|200| L
+    K -->|Fail| M
+    L --> N
     M --> N
-    N --> O["🖨️ Print Result<br/>Serial Monitor"]
+    N --> O
     O --> Z
-    Z --> P["😴 vTaskDelay 15000ms"]
-    P --> Q["🔄 Loop Back"]
+    Z --> P
+    P --> Q
     Q --> A
     
     style A fill:#f3e5f5
@@ -492,18 +511,18 @@ stateDiagram-v2
     APMode --> Portal: Start 192.168.4.1
     Portal --> WiFiReady: User Configure
     
-    WiFiReady --> Creating_Tasks: WiFi Connected ✅
-    Creating_Tasks --> System_Ready: Mutex & Queue OK
+    WiFiReady --> CreatingTasks: WiFi Connected ✅
+    CreatingTasks --> SystemReady: Mutex & Queue OK
     
-    System_Ready --> Running: Start Tasks
+    SystemReady --> Running: Start Tasks
     
     Running --> SensorRead: Core 0 Cycle
     SensorRead --> QueueSend: Data Ready
     QueueSend --> IoTRead: Queue Available
     
-    IoTRead --> WiFi_Check: Core 1 Active
-    WiFi_Check --> Upload: WiFi OK
-    WiFi_Check --> Wait: WiFi Failed
+    IoTRead --> WiFiCheck: Core 1 Active
+    WiFiCheck --> Upload: WiFi OK
+    WiFiCheck --> Wait: WiFi Failed
     
     Upload --> Cloud: HTTP Success
     Cloud --> Running
