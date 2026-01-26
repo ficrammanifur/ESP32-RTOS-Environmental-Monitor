@@ -440,24 +440,24 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[IOT TASK START Core 1 Priority 1]
-    B[Queue Receive xQueueReceive timeout]
-    C{Data Received?}
-    D[Check WiFi WiFi.status]
-    E{WiFi Connected?}
-    F[Log WiFi Error]
-    G[Get API Key From EEPROM]
-    H[Build ThingSpeak URL 4 Fields + Value]
-    I[HTTP Client Begin GET Request]
-    J[Send HTTP Request Start Timer]
-    K{HTTP Response OK?}
-    L[Entry ID Received]
-    M[Log Error Try Next Cycle]
-    N[HTTP End Close Connection]
-    O[Print Result Serial Monitor]
-    Z[Skip Cycle]
-    P[vTaskDelay 15000ms]
-    Q[Loop Back]
+    A[IOT TASK START]
+    B[Queue Receive]
+    C{Data OK?}
+    D[Check WiFi]
+    E{WiFi OK?}
+    F[Log Error]
+    G[Get API Key]
+    H[Build URL]
+    I[HTTP Begin]
+    J[Send Request]
+    K{Response?}
+    L[Success]
+    M[Fail Log]
+    N[HTTP End]
+    O[Print Result]
+    Z[Skip]
+    P[Delay 15s]
+    Q[Loop]
     
     A --> B
     B --> C
@@ -471,8 +471,8 @@ flowchart TD
     H --> I
     I --> J
     J --> K
-    K -->|200| L
-    K -->|Fail| M
+    K -->|OK| L
+    K -->|Err| M
     L --> N
     M --> N
     N --> O
@@ -482,54 +482,55 @@ flowchart TD
     Q --> A
     
     style A fill:#f3e5f5
-    style B fill:#e1bee7
-    style C fill:#fce4ec
-    style D fill:#e1f5fe
-    style E fill:#b3e5fc
-    style G fill:#81d4fa
-    style H fill:#4fc3f7
-    style I fill:#29b6f6
-    style J fill:#1e88e5
-    style K fill:#1565c0
     style L fill:#e8f5e9
     style M fill:#ffebee
-    style N fill:#90caf9
-    style O fill:#f8f8f8
 ```
 
 ### 4. State Machine Diagram
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Boot
-    Boot --> Initialize
-    Initialize --> WiFiConfig
+flowchart TD
+    START([Power On]) --> BOOT[Boot System]
+    BOOT --> INIT[Initialize Hardware]
+    INIT --> CHECK{EEPROM Has WiFi?}
     
-    WiFiConfig --> WiFiReady: Credentials Found
-    WiFiConfig --> APMode: First Boot or Error
+    CHECK -->|No| AP[Start AP Mode 192.168.4.1]
+    CHECK -->|Yes| WIFI[Connect WiFi]
     
-    APMode --> Portal
-    Portal --> WiFiReady: User Configure
+    AP --> PORTAL[WiFi Manager Portal]
+    PORTAL --> SAVE[Save Credentials]
+    SAVE --> WIFI
     
-    WiFiReady --> CreatingTasks: WiFi Connected
-    CreatingTasks --> SystemReady: Mutex and Queue OK
+    WIFI --> READY{WiFi Connected?}
+    READY -->|No| RETRY[Retry Connection]
+    RETRY --> WIFI
+    READY -->|Yes| TASK[Create Tasks and Queue]
     
-    SystemReady --> Running
+    TASK --> RUN[System Running]
     
-    Running --> SensorRead
-    SensorRead --> QueueSend
-    QueueSend --> IoTRead
+    RUN --> CORE0[Core 0: Read Sensors Every 2s]
+    RUN --> CORE1[Core 1: Upload Every 15s]
     
-    IoTRead --> WiFiCheck
-    WiFiCheck --> Upload: WiFi OK
-    WiFiCheck --> Wait: WiFi Failed
+    CORE0 --> QUEUE[Send to Queue]
+    QUEUE --> CORE1
     
-    Upload --> Cloud
-    Cloud --> Running
-    Wait --> Running
+    CORE1 --> CHECK2{WiFi OK?}
+    CHECK2 -->|Yes| UPLOAD[Upload to Cloud]
+    CHECK2 -->|No| SKIP[Skip Upload]
     
-    Running --> Error: WiFi Lost
-    Error --> WiFiConfig
+    UPLOAD --> RUN
+    SKIP --> RUN
+    
+    RUN --> ERR{WiFi Lost?}
+    ERR -->|Yes| WIFI
+    ERR -->|No| RUN
+    
+    style START fill:#e8f5e9
+    style BOOT fill:#fff3e0
+    style AP fill:#ffebee
+    style WIFI fill:#e1f5fe
+    style RUN fill:#f3e5f5
+    style UPLOAD fill:#c8e6c9
 ```
 
 ---
