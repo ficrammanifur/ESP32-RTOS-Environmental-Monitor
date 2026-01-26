@@ -311,60 +311,47 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    subgraph HW[Hardware Layer]
-        ESP[ESP32 DevKitC 240MHz Dual-Core]
-        ADC[ADC Controller 8-channel 12-bit]
-        I2C[I2C Interface GPIO21/22]
-        GPIO[GPIO Controller 34 Total Pins]
-    end
-    
-    subgraph FW[Firmware Layer]
-        RTOS[FreeRTOS Task Scheduler]
-        TASK0[Task 0 Pinned to Core 0]
-        TASK1[Task 1 Pinned to Core 1]
-        COMM[Queue and Mutex Thread-Safe IPC]
-    end
-    
-    subgraph APP[Application Layer]
-        SENSOR[Sensor Manager Read + Fusion]
-        IOT[IoT Manager WiFi + ThingSpeak]
-        UI[Serial Monitor Debug Output]
-    end
-    
-    subgraph CLOUD[Cloud Layer]
-        THING[ThingSpeak Channel 4 Fields]
-        VIS[Dashboard Charts and Graphs]
-        STORE[Time-Series Data Storage]
-    end
-    
-    ESP --> ADC
-    ESP --> I2C
-    ESP --> GPIO
-    
+    ESP32["ESP32 DevKitC"]
+    ADC["ADC Controller"]
+    I2C["I2C Interface"]
+    GPIO["GPIO Controller"]
+
+    RTOS["FreeRTOS Scheduler"]
+    TASK0["Sensor Task (Core 0)"]
+    TASK1["IoT Task (Core 1)"]
+    QUEUE["Queue + Mutex"]
+
+    SENSOR["Sensor Manager"]
+    IOT["IoT Manager"]
+    SERIAL["Serial Output"]
+
+    THING["ThingSpeak"]
+    VIS["Dashboard"]
+    STORE["Data Storage"]
+
+    ESP32 --> ADC
+    ESP32 --> I2C
+    ESP32 --> GPIO
+
     ADC --> RTOS
     I2C --> RTOS
     GPIO --> RTOS
-    
+
     RTOS --> TASK0
     RTOS --> TASK1
-    
-    TASK0 --> COMM
-    TASK1 --> COMM
-    
-    COMM --> SENSOR
-    COMM --> IOT
-    
-    SENSOR --> UI
-    IOT --> UI
-    
+
+    TASK0 --> QUEUE
+    TASK1 --> QUEUE
+
+    QUEUE --> SENSOR
+    QUEUE --> IOT
+
+    SENSOR --> SERIAL
+    IOT --> SERIAL
+
     IOT --> THING
     THING --> VIS
     THING --> STORE
-    
-    style HW fill:#ffebee
-    style FW fill:#e3f2fd
-    style APP fill:#f3e5f5
-    style CLOUD fill:#e8f5e9
 ```
 
 ---
@@ -375,162 +362,125 @@ graph TB
 
 ```mermaid
 graph LR
-    A[Raw Sensor Input] --> B[ADC Conversion]
-    B --> C[Averaging Algorithm 20x samples]
-    C --> D[Sensor Fusion Temp fusion]
-    D --> E[SensorData Struct]
-    E --> F[Mutex Protected Queue Send]
-    F --> G[Core 1 Receives]
-    G --> H{WiFi Check}
-    H -->|Connected| I[Build HTTP URL ThingSpeak API]
-    H -->|Failed| J[Skip Upload Retry Later]
-    I --> K[HTTP POST 4 Fields]
-    K --> L[ThingSpeak Cloud]
-    J --> M[Delay 15s]
-    L --> M
-    M --> G
-    
-    style A fill:#ffebee
-    style B fill:#fff3e0
-    style C fill:#fff3e0
-    style D fill:#f3e5f5
-    style E fill:#e3f2fd
-    style F fill:#e3f2fd
-    style G fill:#f3e5f5
-    style H fill:#fce4ec
-    style I fill:#e1f5fe
-    style K fill:#e1f5fe
-    style L fill:#e8f5e9
+    RAW["Raw Sensor Input"]
+    ADC["ADC Conversion"]
+    AVG["Averaging (20 samples)"]
+    FUSION["Temperature Fusion"]
+    DATA["SensorData Struct"]
+    QUEUE["Queue Send"]
+    CORE1["Core 1 Receive"]
+    WIFI{WiFi OK?}
+    BUILD["Build HTTP URL"]
+    POST["HTTP POST"]
+    CLOUD["ThingSpeak Cloud"]
+    DELAY["Delay 15s"]
+
+    RAW --> ADC
+    ADC --> AVG
+    AVG --> FUSION
+    FUSION --> DATA
+    DATA --> QUEUE
+    QUEUE --> CORE1
+    CORE1 --> WIFI
+    WIFI -->|Yes| BUILD
+    WIFI -->|No| DELAY
+    BUILD --> POST
+    POST --> CLOUD
+    CLOUD --> DELAY
+    DELAY --> CORE1
 ```
 
 ### 2. Core 0 - Sensor Task (Every 2 seconds)
 
 ```mermaid
 flowchart TD
-    A[SENSOR TASK START Core 0 Priority 2] --> B[Lock Mutex]
-    B --> C[Read MQ-135 GPIO35 ADC0 20x averaging]
-    C --> D[Read LM35 GPIO32 ADC1 Convert to Celsius]
-    D --> E[Read DHT22 GPIO27 I2C Get Temp and Humidity]
-    E --> F[Read LDR GPIO34 ADC3 Map 0-4095 to 0-100%]
-    F --> G[Toggle LED GPIO33 Signal]
-    G --> H[Fusion Temperature Avg LM35 + DHT22]
-    H --> I[Prepare SensorData Struct with all values]
-    I --> J[Queue Send xQueueSend 3s timeout]
-    J --> K[Unlock Mutex]
-    K --> L[Print Serial Debug Output]
-    L --> M[vTaskDelay 2000ms]
-    M --> N[Loop Back]
-    N --> A
-    
-    style A fill:#fff3e0
-    style B fill:#ffe0b2
-    style C fill:#ffcc80
-    style D fill:#ffcc80
-    style E fill:#ffcc80
-    style F fill:#ffcc80
-    style G fill:#ffb74d
-    style H fill:#f3e5f5
-    style I fill:#e3f2fd
-    style J fill:#b3e5fc
-    style K fill:#ffe0b2
-    style L fill:#f8f8f8
+    START["Sensor Task Start (Core 0)"]
+    LOCK["Lock Mutex"]
+    MQ["Read MQ-135 (ADC)"]
+    LM["Read LM35 (ADC)"]
+    DHT["Read DHT22"]
+    LDR["Read LDR (ADC)"]
+    FUSION["Temperature Fusion"]
+    LED["Toggle LED"]
+    PACK["Prepare SensorData"]
+    SEND["Queue Send"]
+    UNLOCK["Unlock Mutex"]
+    DELAY["Delay 2000 ms"]
+
+    START --> LOCK
+    LOCK --> MQ
+    MQ --> LM
+    LM --> DHT
+    DHT --> LDR
+    LDR --> FUSION
+    FUSION --> LED
+    LED --> PACK
+    PACK --> SEND
+    SEND --> UNLOCK
+    UNLOCK --> DELAY
+    DELAY --> START
 ```
 
 ### 3. Core 1 - IoT Task (Every 15 seconds)
 
 ```mermaid
 flowchart TD
-    A[IOT TASK START]
-    B[Queue Receive]
-    C{Data OK?}
-    D[Check WiFi]
-    E{WiFi OK?}
-    F[Log Error]
-    G[Get API Key]
-    H[Build URL]
-    I[HTTP Begin]
-    J[Send Request]
-    K{Response?}
-    L[Success]
-    M[Fail Log]
-    N[HTTP End]
-    O[Print Result]
-    Z[Skip]
-    P[Delay 15s]
-    Q[Loop]
-    
-    A --> B
-    B --> C
-    C -->|Yes| D
-    C -->|No| Z
-    D --> E
-    E -->|No| F
-    E -->|Yes| G
-    F --> Z
-    G --> H
-    H --> I
-    I --> J
-    J --> K
-    K -->|OK| L
-    K -->|Err| M
-    L --> N
-    M --> N
-    N --> O
-    O --> Z
-    Z --> P
-    P --> Q
-    Q --> A
-    
-    style A fill:#f3e5f5
-    style L fill:#e8f5e9
-    style M fill:#ffebee
+    START["IoT Task Start"]
+    RECEIVE["Queue Receive"]
+    DATAOK{Data Valid?}
+    WIFI["Check WiFi"]
+    WIFIOK{WiFi OK?}
+    API["Load API Key"]
+    URL["Build HTTP URL"]
+    HTTP["Send HTTP POST"]
+    RESP{Response OK?}
+    SUCCESS["Log Success"]
+    FAIL["Log Error"]
+    DELAY["Delay 15000 ms"]
+
+    START --> RECEIVE
+    RECEIVE --> DATAOK
+    DATAOK -->|No| DELAY
+    DATAOK -->|Yes| WIFI
+    WIFI --> WIFIOK
+    WIFIOK -->|No| FAIL
+    WIFIOK -->|Yes| API
+    API --> URL
+    URL --> HTTP
+    HTTP --> RESP
+    RESP -->|Yes| SUCCESS
+    RESP -->|No| FAIL
+    SUCCESS --> DELAY
+    FAIL --> DELAY
+    DELAY --> START
 ```
 
 ### 4. State Machine Diagram
 
 ```mermaid
 flowchart TD
-    START([Power On]) --> BOOT[Boot System]
-    BOOT --> INIT[Initialize Hardware]
-    INIT --> CHECK{EEPROM Has WiFi?}
-    
-    CHECK -->|No| AP[Start AP Mode 192.168.4.1]
-    CHECK -->|Yes| WIFI[Connect WiFi]
-    
-    AP --> PORTAL[WiFi Manager Portal]
-    PORTAL --> SAVE[Save Credentials]
-    SAVE --> WIFI
-    
-    WIFI --> READY{WiFi Connected?}
-    READY -->|No| RETRY[Retry Connection]
-    RETRY --> WIFI
-    READY -->|Yes| TASK[Create Tasks and Queue]
-    
-    TASK --> RUN[System Running]
-    
-    RUN --> CORE0[Core 0: Read Sensors Every 2s]
-    RUN --> CORE1[Core 1: Upload Every 15s]
-    
-    CORE0 --> QUEUE[Send to Queue]
-    QUEUE --> CORE1
-    
-    CORE1 --> CHECK2{WiFi OK?}
-    CHECK2 -->|Yes| UPLOAD[Upload to Cloud]
-    CHECK2 -->|No| SKIP[Skip Upload]
-    
+    POWER["Power On"]
+    INIT["Initialize Hardware"]
+    WIFI_CFG{WiFi Saved?}
+    AP["Start AP Mode"]
+    WIFI["Connect WiFi"]
+    READY["System Ready"]
+    RUN["System Running"]
+    UPLOAD["Upload Data"]
+    SKIP["Skip Upload"]
+
+    POWER --> INIT
+    INIT --> WIFI_CFG
+    WIFI_CFG -->|No| AP
+    AP --> WIFI
+    WIFI_CFG -->|Yes| WIFI
+    WIFI --> READY
+    READY --> RUN
+
+    RUN --> UPLOAD
+    RUN --> SKIP
     UPLOAD --> RUN
     SKIP --> RUN
-    
-    RUN --> ERR{WiFi Lost?}
-    ERR -->|Yes| WIFI
-    ERR -->|No| RUN
-    
-    style START fill:#e8f5e9
-    style BOOT fill:#fff3e0
-    style AP fill:#ffebee
-    style WIFI fill:#e1f5fe
-    style RUN fill:#f3e5f5
-    style UPLOAD fill:#c8e6c9
 ```
 
 ---
