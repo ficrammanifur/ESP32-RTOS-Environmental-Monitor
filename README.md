@@ -310,48 +310,37 @@ sequenceDiagram
 ### System Architecture Diagram
 
 ```mermaid
-graph TB
-    ESP32["ESP32 DevKitC"]
-    ADC["ADC Controller"]
-    I2C["I2C Interface"]
-    GPIO["GPIO Controller"]
+graph TD
+    subgraph Hardware["Perangkat Keras (ESP32)"]
+        ESP["ESP32 DevKitC"]
+        SENSORS["MQ135, LM35, DHT22, LDR"]
+    end
 
-    RTOS["FreeRTOS Scheduler"]
-    TASK0["Sensor Task (Core 0)"]
-    TASK1["IoT Task (Core 1)"]
-    QUEUE["Queue + Mutex"]
+    subgraph Kernel["FreeRTOS Kernel"]
+        RTOS["FreeRTOS Scheduler"]
+        QUEUE[("Shared Queue + Mutex")]
+    end
 
-    SENSOR["Sensor Manager"]
-    IOT["IoT Manager"]
-    SERIAL["Serial Output"]
+    subgraph Processing["Dual Core Processing"]
+        TASK0["Sensor Task (Core 0)"]
+        TASK1["IoT Task (Core 1)"]
+    end
 
-    THING["ThingSpeak"]
-    VIS["Dashboard"]
-    STORE["Data Storage"]
+    subgraph Cloud["External Services"]
+        TS["ThingSpeak Cloud"]
+        DB["Dashboard & Storage"]
+    end
 
-    ESP32 --> ADC
-    ESP32 --> I2C
-    ESP32 --> GPIO
-
-    ADC --> RTOS
-    I2C --> RTOS
-    GPIO --> RTOS
-
-    RTOS --> TASK0
-    RTOS --> TASK1
-
+    ESP --- SENSORS
+    SENSORS --> TASK0
     TASK0 --> QUEUE
-    TASK1 --> QUEUE
+    QUEUE --> TASK1
+    TASK1 --> TS
+    TS --> DB
 
-    QUEUE --> SENSOR
-    QUEUE --> IOT
-
-    SENSOR --> SERIAL
-    IOT --> SERIAL
-
-    IOT --> THING
-    THING --> VIS
-    THING --> STORE
+    style QUEUE fill:#fff3e0,stroke:#ff9800
+    style TASK0 fill:#e3f2fd,stroke:#2196f3
+    style TASK1 fill:#f3e5f5,stroke:#9c27b0
 ```
 
 ---
@@ -411,93 +400,71 @@ graph TB
 ### 2. Core 0 - Sensor Task (Every 2 seconds)
 
 ```mermaid
-flowchart TB
-    subgraph CORE0["🔷 CORE 0 - SENSOR TASK"]
-        START(["Start"]) --> LOCK["🔒 Lock Mutex"]
-        LOCK --> SENSORS["📡 Read All Sensors"]
-        
-        SENSORS --> MQ["MQ-135<br/>Gas Level"]
-        SENSORS --> LM["LM35<br/>Temperature"]
-        SENSORS --> DHT["DHT22<br/>Temp & Humidity"]
-        SENSORS --> LDR["LDR<br/>Light Level"]
-        
-        MQ --> AVG["📊 Average Values"]
-        LM --> AVG
-        DHT --> AVG
-        LDR --> AVG
-        
-        AVG --> FUSION["🧠 Temperature Fusion"]
-        FUSION --> LED["🔴 Toggle LED"]
-        LED --> PACK["📦 Prepare SensorData"]
-        PACK --> SEND["📤 Queue Send"]
-        SEND --> UNLOCK["🔓 Unlock Mutex"]
-        UNLOCK --> DELAY["😴 Delay 2000ms"]
-        DELAY --> START
+flowchart TD
+    A([Start Task 0]) --> B[Ambil Mutex]
+    B --> C{Baca Data Sensor}
+    
+    subgraph Reading["Proses Sampling"]
+        C --> D[ADC: MQ135 & LM35]
+        C --> E[I2C/OneWire: DHT22]
+        C --> F[GPIO: LDR]
     end
+    
+    D & E & F --> G[Averaging 20 Samples]
+    G --> H[Temperature Fusion]
+    H --> I[Bungkus ke Struct SensorData]
+    I --> J[Kirim ke Queue]
+    J --> K[Lepas Mutex]
+    K --> L[Toggle LED Status]
+    L --> M[Delay 2000ms]
+    M --> B
 ```
 
 ### 3. Core 1 - IoT Task (Every 15 seconds)
 
 ```mermaid
-flowchart TB
-    subgraph CORE1["🔶 CORE 1 - IOT TASK"]
-        START(["Start"]) --> RECEIVE["📥 Queue Receive"]
-        RECEIVE --> DATAOK{"Data Valid?"}
-        
-        DATAOK -->|No| SKIP["⏭️ Skip Upload"]
-        DATAOK -->|Yes| WIFI["🌐 Check WiFi"]
-        
-        WIFI --> WIFIOK{"WiFi OK?"}
-        WIFIOK -->|No| FAIL["❌ Log Error"]
-        WIFIOK -->|Yes| UPLOAD["☁️ Upload Process"]
-        
-        UPLOAD --> API["🔑 Load API Key"]
-        API --> URL["🔗 Build HTTP URL"]
-        URL --> HTTP["📤 HTTP POST"]
-        HTTP --> RESP{"Response OK?"}
-        
-        RESP -->|Yes| SUCCESS["✅ Log Success"]
-        RESP -->|No| FAIL
-        
-        SUCCESS --> DELAY
-        FAIL --> DELAY
-        SKIP --> DELAY
-        
-        DELAY["😴 Delay 15000ms"] --> START
-    end
+flowchart TD
+    Start([Start Task 1]) --> Receive[Terima Data dari Queue]
+    Receive --> CheckWiFi{WiFi Terhubung?}
+    
+    CheckWiFi -- Tidak --> Reconnect[Inisialisasi Reconnect]
+    Reconnect --> Delay
+    
+    CheckWiFi -- Ya --> BuildURL[Susun HTTP Request URL]
+    BuildURL --> Send[HTTP POST ke ThingSpeak]
+    
+    Send --> Response{Respon 200 OK?}
+    Response -- Ya --> LogSuccess[Log: Data Terkirim]
+    Response -- Tidak --> LogFail[Log: Error/Timeout]
+    
+    LogSuccess & LogFail --> Delay[Delay 15000ms]
+    Delay --> Receive
 ```
 
 ### 4. State Machine Diagram
 
 ```mermaid
-flowchart TB
-    subgraph STATES["🔄 System States"]
-        POWER(["Power On"]) --> INIT["⚙️ Initialize Hardware<br/>GPIO, ADC, I2C"]
-        INIT --> WIFI_CFG{"WiFi<br/>Saved?"}
-        
-        WIFI_CFG -->|No| AP["📡 Start AP Mode"]
-        AP --> CONFIG["🔧 Configure WiFi"]
-        CONFIG --> WIFI["🌐 Connect WiFi"]
-        
-        WIFI_CFG -->|Yes| WIFI
-        
-        WIFI --> READY["✅ System Ready"]
-        READY --> RUN["🏃 System Running"]
-        
-        RUN --> ACTION{"Upload<br/>Cycle?"}
-        ACTION -->|Yes| UPLOAD["☁️ Upload Data"]
-        ACTION -->|No| SKIP["⏭️ Skip Upload"]
-        
-        UPLOAD --> RUN
-        SKIP --> RUN
-    end
+stateDiagram-v2
+    [*] --> Inisialisasi
+    Inisialisasi --> WiFiConfig: Cek Kredensial
     
-    style STATES fill:#f5f5f5
-    style POWER fill:#e8f5e9
-    style INIT fill:#e3f2fd
-    style WIFI fill:#fff3e0
-    style READY fill:#e8f5e9
-    style RUN fill:#f3e5f5
+    state WiFiConfig {
+        [*] --> Terhubung?
+        Terhubung? --> Operasional: Ya
+        Terhubung? --> AP_Mode: Tidak
+        AP_Mode --> Konfigurasi_Baru
+        Konfigurasi_Baru --> Terhubung?
+    }
+    
+    state Operasional {
+        [*] --> Sampling
+        Sampling --> Mengantri
+        Mengantri --> Mengunggah
+        Mengunggah --> Sampling
+    }
+    
+    Operasional --> WiFiConfig: Koneksi Terputus
+    Operasional --> [*]: Power Off
 ```
 
 ---
