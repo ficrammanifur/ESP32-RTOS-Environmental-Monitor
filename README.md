@@ -361,25 +361,37 @@ graph TB
 ### 1. Data Flow Diagram
 
 ```mermaid
-graph LR
-    RAW["Raw Sensor Input"]
-    ADC["ADC Conversion"]
-    AVG["Averaging (20 samples)"]
-    FUSION["Temperature Fusion"]
-    DATA["SensorData Struct"]
-    QUEUE["Queue Send"]
-    CORE1["Core 1 Receive"]
-    WIFI{WiFi OK?}
-    BUILD["Build HTTP URL"]
-    POST["HTTP POST"]
-    CLOUD["ThingSpeak Cloud"]
-    DELAY["Delay 15s"]
-
+graph TB
+    subgraph INPUT["📥 Sensor Input"]
+        RAW["Raw Sensor Data"]
+    end
+    
+    subgraph PROCESSING["⚙️ Data Processing"]
+        ADC["ADC Conversion"]
+        AVG["Averaging (20 samples)"]
+        FUSION["Temperature Fusion"]
+    end
+    
+    subgraph COMMUNICATION["📡 Communication"]
+        QUEUE["Queue Send"]
+        CORE1["Core 1 Receive"]
+        WIFI{WiFi OK?}
+    end
+    
+    subgraph UPLOAD["☁️ Cloud Upload"]
+        BUILD["Build HTTP URL"]
+        POST["HTTP POST"]
+        CLOUD["ThingSpeak Cloud"]
+    end
+    
+    subgraph TIMING["⏰ Timing Control"]
+        DELAY["Delay 15s"]
+    end
+    
     RAW --> ADC
     ADC --> AVG
     AVG --> FUSION
-    FUSION --> DATA
-    DATA --> QUEUE
+    FUSION --> QUEUE
     QUEUE --> CORE1
     CORE1 --> WIFI
     WIFI -->|Yes| BUILD
@@ -388,99 +400,104 @@ graph LR
     POST --> CLOUD
     CLOUD --> DELAY
     DELAY --> CORE1
+    
+    style INPUT fill:#e8f5e9
+    style PROCESSING fill:#fff3e0
+    style COMMUNICATION fill:#e1f5ff
+    style UPLOAD fill:#f3e5f5
+    style TIMING fill:#ffebee
 ```
 
 ### 2. Core 0 - Sensor Task (Every 2 seconds)
 
 ```mermaid
-flowchart TD
-    START["Sensor Task Start (Core 0)"]
-    LOCK["Lock Mutex"]
-    MQ["Read MQ-135 (ADC)"]
-    LM["Read LM35 (ADC)"]
-    DHT["Read DHT22"]
-    LDR["Read LDR (ADC)"]
-    FUSION["Temperature Fusion"]
-    LED["Toggle LED"]
-    PACK["Prepare SensorData"]
-    SEND["Queue Send"]
-    UNLOCK["Unlock Mutex"]
-    DELAY["Delay 2000 ms"]
-
-    START --> LOCK
-    LOCK --> MQ
-    MQ --> LM
-    LM --> DHT
-    DHT --> LDR
-    LDR --> FUSION
-    FUSION --> LED
-    LED --> PACK
-    PACK --> SEND
-    SEND --> UNLOCK
-    UNLOCK --> DELAY
-    DELAY --> START
+flowchart TB
+    subgraph CORE0["🔷 CORE 0 - SENSOR TASK"]
+        START(["Start"]) --> LOCK["🔒 Lock Mutex"]
+        LOCK --> SENSORS["📡 Read All Sensors"]
+        
+        SENSORS --> MQ["MQ-135<br/>Gas Level"]
+        SENSORS --> LM["LM35<br/>Temperature"]
+        SENSORS --> DHT["DHT22<br/>Temp & Humidity"]
+        SENSORS --> LDR["LDR<br/>Light Level"]
+        
+        MQ --> AVG["📊 Average Values"]
+        LM --> AVG
+        DHT --> AVG
+        LDR --> AVG
+        
+        AVG --> FUSION["🧠 Temperature Fusion"]
+        FUSION --> LED["🔴 Toggle LED"]
+        LED --> PACK["📦 Prepare SensorData"]
+        PACK --> SEND["📤 Queue Send"]
+        SEND --> UNLOCK["🔓 Unlock Mutex"]
+        UNLOCK --> DELAY["😴 Delay 2000ms"]
+        DELAY --> START
+    end
 ```
 
 ### 3. Core 1 - IoT Task (Every 15 seconds)
 
 ```mermaid
-flowchart TD
-    START["IoT Task Start"]
-    RECEIVE["Queue Receive"]
-    DATAOK{Data Valid?}
-    WIFI["Check WiFi"]
-    WIFIOK{WiFi OK?}
-    API["Load API Key"]
-    URL["Build HTTP URL"]
-    HTTP["Send HTTP POST"]
-    RESP{Response OK?}
-    SUCCESS["Log Success"]
-    FAIL["Log Error"]
-    DELAY["Delay 15000 ms"]
-
-    START --> RECEIVE
-    RECEIVE --> DATAOK
-    DATAOK -->|No| DELAY
-    DATAOK -->|Yes| WIFI
-    WIFI --> WIFIOK
-    WIFIOK -->|No| FAIL
-    WIFIOK -->|Yes| API
-    API --> URL
-    URL --> HTTP
-    HTTP --> RESP
-    RESP -->|Yes| SUCCESS
-    RESP -->|No| FAIL
-    SUCCESS --> DELAY
-    FAIL --> DELAY
-    DELAY --> START
+flowchart TB
+    subgraph CORE1["🔶 CORE 1 - IOT TASK"]
+        START(["Start"]) --> RECEIVE["📥 Queue Receive"]
+        RECEIVE --> DATAOK{"Data Valid?"}
+        
+        DATAOK -->|No| SKIP["⏭️ Skip Upload"]
+        DATAOK -->|Yes| WIFI["🌐 Check WiFi"]
+        
+        WIFI --> WIFIOK{"WiFi OK?"}
+        WIFIOK -->|No| FAIL["❌ Log Error"]
+        WIFIOK -->|Yes| UPLOAD["☁️ Upload Process"]
+        
+        UPLOAD --> API["🔑 Load API Key"]
+        API --> URL["🔗 Build HTTP URL"]
+        URL --> HTTP["📤 HTTP POST"]
+        HTTP --> RESP{"Response OK?"}
+        
+        RESP -->|Yes| SUCCESS["✅ Log Success"]
+        RESP -->|No| FAIL
+        
+        SUCCESS --> DELAY
+        FAIL --> DELAY
+        SKIP --> DELAY
+        
+        DELAY["😴 Delay 15000ms"] --> START
+    end
 ```
 
 ### 4. State Machine Diagram
 
 ```mermaid
-flowchart TD
-    POWER["Power On"]
-    INIT["Initialize Hardware"]
-    WIFI_CFG{WiFi Saved?}
-    AP["Start AP Mode"]
-    WIFI["Connect WiFi"]
-    READY["System Ready"]
-    RUN["System Running"]
-    UPLOAD["Upload Data"]
-    SKIP["Skip Upload"]
-
-    POWER --> INIT
-    INIT --> WIFI_CFG
-    WIFI_CFG -->|No| AP
-    AP --> WIFI
-    WIFI_CFG -->|Yes| WIFI
-    WIFI --> READY
-    READY --> RUN
-
-    RUN --> UPLOAD
-    RUN --> SKIP
-    UPLOAD --> RUN
-    SKIP --> RUN
+flowchart TB
+    subgraph STATES["🔄 System States"]
+        POWER(["Power On"]) --> INIT["⚙️ Initialize Hardware<br/>GPIO, ADC, I2C"]
+        INIT --> WIFI_CFG{"WiFi<br/>Saved?"}
+        
+        WIFI_CFG -->|No| AP["📡 Start AP Mode"]
+        AP --> CONFIG["🔧 Configure WiFi"]
+        CONFIG --> WIFI["🌐 Connect WiFi"]
+        
+        WIFI_CFG -->|Yes| WIFI
+        
+        WIFI --> READY["✅ System Ready"]
+        READY --> RUN["🏃 System Running"]
+        
+        RUN --> ACTION{"Upload<br/>Cycle?"}
+        ACTION -->|Yes| UPLOAD["☁️ Upload Data"]
+        ACTION -->|No| SKIP["⏭️ Skip Upload"]
+        
+        UPLOAD --> RUN
+        SKIP --> RUN
+    end
+    
+    style STATES fill:#f5f5f5
+    style POWER fill:#e8f5e9
+    style INIT fill:#e3f2fd
+    style WIFI fill:#fff3e0
+    style READY fill:#e8f5e9
+    style RUN fill:#f3e5f5
 ```
 
 ---
