@@ -25,7 +25,7 @@
 
 - [✨ Features](#-features)
 - [🧩 Komponen Utama](#-komponen-utama)
-- [🏗️ Arsitektur Sistem](#-arsitektur-sistem)
+- [🏗️ Arsitektur Sistem](#-Arsitektur-Sistem)
 - [🔄 Alur Kerja Sistem](#-alur-kerja-sistem)
 - [📁 Struktur Project](#-struktur-project)
 - [🚀 Quick Start](#-quick-start)
@@ -156,7 +156,7 @@ graph TB
 
 ---
 
-## 🏗️ Arsitektur Sistem
+## Arsitektur Sistem
 
 ### Diagram Blok Sistem
 
