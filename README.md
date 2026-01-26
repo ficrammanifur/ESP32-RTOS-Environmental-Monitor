@@ -275,30 +275,30 @@ flowchart LR
 
 ```mermaid
 sequenceDiagram
-    participant C0 as Core 0<br/>Sensor Task
-    participant Q as FreeRTOS Queue<br/>& Mutex
-    participant C1 as Core 1<br/>IoT Task
-    participant TS as ThingSpeak<br/>API
-    participant DB as Cloud<br/>Database
+    participant C0 as Core 0 Sensor Task
+    participant Q as FreeRTOS Queue
+    participant C1 as Core 1 IoT Task
+    participant TS as ThingSpeak API
+    participant DB as Cloud Database
     
     loop Every 2 seconds
-        C0->>C0: Read MQ135, LM35, DHT22, LDR
-        C0->>C0: Sensor Fusion & Average
-        C0->>C0: Toggle LED (Alive Signal)
-        C0->>Q: xQueueSend(SensorData)
-        Note over C0: Protected by Mutex
+        C0->>C0: Read Sensors
+        C0->>C0: Sensor Fusion
+        C0->>C0: Toggle LED
+        C0->>Q: xQueueSend(Data)
+        Note over C0: Mutex Protected
         C0->>C0: vTaskDelay(2000ms)
     end
     
     loop Every 15 seconds
-        C1->>Q: xQueueReceive(SensorData)
-        C1->>C1: Check WiFi Connection
+        C1->>Q: xQueueReceive(Data)
+        C1->>C1: Check WiFi
         alt WiFi Connected
-            C1->>TS: HTTP GET with API Key
-            TS->>TS: Validate Channel & Fields
-            TS->>DB: Write Data to Fields
-            DB->>TS: Response: 200 OK
-            TS->>C1: Response 200 + Entry ID
+            C1->>TS: HTTP GET + API Key
+            TS->>TS: Validate Channel
+            TS->>DB: Write Data
+            DB->>TS: Response 200 OK
+            TS->>C1: Entry ID
             Note over C1,TS: Success Log
         else WiFi Disconnected
             Note over C1: Skip Upload
@@ -311,30 +311,30 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    subgraph HW["🔧 Hardware Layer"]
-        ESP["ESP32 DevKitC<br/>240MHz Dual-Core"]
-        ADC["ADC Controller<br/>8-channel 12-bit"]
-        I2C["I2C Interface<br/>GPIO21/22"]
-        GPIO["GPIO Controller<br/>34 Total Pins"]
+    subgraph HW[Hardware Layer]
+        ESP[ESP32 DevKitC 240MHz Dual-Core]
+        ADC[ADC Controller 8-channel 12-bit]
+        I2C[I2C Interface GPIO21/22]
+        GPIO[GPIO Controller 34 Total Pins]
     end
     
-    subgraph FW["🔧 Firmware Layer"]
-        RTOS["⚙️ FreeRTOS<br/>Task Scheduler"]
-        TASK0["🔷 Task 0<br/>Pinned to Core 0"]
-        TASK1["🔶 Task 1<br/>Pinned to Core 1"]
-        COMM["📦 Queue & Mutex<br/>Thread-Safe IPC"]
+    subgraph FW[Firmware Layer]
+        RTOS[FreeRTOS Task Scheduler]
+        TASK0[Task 0 Pinned to Core 0]
+        TASK1[Task 1 Pinned to Core 1]
+        COMM[Queue and Mutex Thread-Safe IPC]
     end
     
-    subgraph APP["📱 Application Layer"]
-        SENSOR["Sensor Manager<br/>Read + Fusion"]
-        IOT["IoT Manager<br/>WiFi + ThingSpeak"]
-        UI["Serial Monitor<br/>Debug Output"]
+    subgraph APP[Application Layer]
+        SENSOR[Sensor Manager Read + Fusion]
+        IOT[IoT Manager WiFi + ThingSpeak]
+        UI[Serial Monitor Debug Output]
     end
     
-    subgraph CLOUD["☁️ Cloud Layer"]
-        THING["ThingSpeak Channel<br/>4 Fields"]
-        VIS["Dashboard<br/>Charts & Graphs"]
-        STORE["Time-Series<br/>Data Storage"]
+    subgraph CLOUD[Cloud Layer]
+        THING[ThingSpeak Channel 4 Fields]
+        VIS[Dashboard Charts and Graphs]
+        STORE[Time-Series Data Storage]
     end
     
     ESP --> ADC
@@ -375,18 +375,18 @@ graph TB
 
 ```mermaid
 graph LR
-    A["📡 Raw Sensor Input"] --> B["🔄 ADC Conversion"]
-    B --> C["📊 Averaging Algorithm<br/>20x samples"]
-    C --> D["🧠 Sensor Fusion<br/>Temp fusion LM35+DHT"]
-    D --> E["📦 SensorData Struct"]
-    E --> F["🔐 Mutex Protected<br/>Queue Send"]
-    F --> G["✅ Core 1 Receives"]
-    G --> H{🌐 WiFi Check}
-    H -->|Connected| I["🔗 Build HTTP URL<br/>ThingSpeak API"]
-    H -->|Failed| J["⏭️ Skip Upload<br/>Retry Later"]
-    I --> K["📡 HTTP POST<br/>4 Fields"]
-    K --> L["☁️ ThingSpeak Cloud"]
-    J --> M["⏰ Delay 15s"]
+    A[Raw Sensor Input] --> B[ADC Conversion]
+    B --> C[Averaging Algorithm 20x samples]
+    C --> D[Sensor Fusion Temp fusion]
+    D --> E[SensorData Struct]
+    E --> F[Mutex Protected Queue Send]
+    F --> G[Core 1 Receives]
+    G --> H{WiFi Check}
+    H -->|Connected| I[Build HTTP URL ThingSpeak API]
+    H -->|Failed| J[Skip Upload Retry Later]
+    I --> K[HTTP POST 4 Fields]
+    K --> L[ThingSpeak Cloud]
+    J --> M[Delay 15s]
     L --> M
     M --> G
     
@@ -406,20 +406,20 @@ graph LR
 ### 2. Core 0 - Sensor Task (Every 2 seconds)
 
 ```mermaid
-graph TD
-    A["🔷 SENSOR TASK START<br/>Core 0 - Priority 2"] --> B["🔓 Lock Mutex"]
-    B --> C["📡 Read MQ-135<br/>GPIO35 ADC0<br/>20x averaging"]
-    C --> D["🌡️ Read LM35<br/>GPIO32 ADC1<br/>Convert mV→°C"]
-    D --> E["💨 Read DHT22<br/>GPIO27 I2C<br/>Get T°C & Humidity"]
-    E --> F["💡 Read LDR<br/>GPIO34 ADC3<br/>Map 0-4095→0-100%"]
-    F --> G["🔴 Toggle LED<br/>GPIO33 Signal"]
-    G --> H["🧠 Fusion Temperature<br/>Avg: LM35 + DHT22"]
-    H --> I["📊 Prepare SensorData<br/>Struct with all values"]
-    I --> J["📤 Queue Send<br/>xQueueSend 3s timeout"]
-    J --> K["🔓 Unlock Mutex"]
-    K --> L["🖨️ Print Serial<br/>Debug Output"]
-    L --> M["😴 vTaskDelay 2000ms"]
-    M --> N["🔄 Loop Back"]
+flowchart TD
+    A[SENSOR TASK START Core 0 Priority 2] --> B[Lock Mutex]
+    B --> C[Read MQ-135 GPIO35 ADC0 20x averaging]
+    C --> D[Read LM35 GPIO32 ADC1 Convert to Celsius]
+    D --> E[Read DHT22 GPIO27 I2C Get Temp and Humidity]
+    E --> F[Read LDR GPIO34 ADC3 Map 0-4095 to 0-100%]
+    F --> G[Toggle LED GPIO33 Signal]
+    G --> H[Fusion Temperature Avg LM35 + DHT22]
+    H --> I[Prepare SensorData Struct with all values]
+    I --> J[Queue Send xQueueSend 3s timeout]
+    J --> K[Unlock Mutex]
+    K --> L[Print Serial Debug Output]
+    L --> M[vTaskDelay 2000ms]
+    M --> N[Loop Back]
     N --> A
     
     style A fill:#fff3e0
@@ -440,24 +440,24 @@ graph TD
 
 ```mermaid
 flowchart TD
-    A["🔶 IOT TASK START<br/>Core 1 - Priority 1"]
-    B["📦 Queue Receive<br/>xQueueReceive timeout"]
-    C{📦 Data<br/>Received?}
-    D["🌐 Check WiFi<br/>WiFi.status()"]
-    E{WiFi<br/>Connected?}
-    F["⚠️ Log WiFi Error"]
-    G["🔑 Get API Key<br/>From EEPROM"]
-    H["🔗 Build ThingSpeak URL<br/>4 Fields + Value"]
-    I["📡 HTTP Client Begin<br/>GET Request"]
-    J["⏱️ Send HTTP Request<br/>Start Timer"]
-    K{HTTP<br/>Response OK?}
-    L["✅ Entry ID Received"]
-    M["❌ Log Error<br/>Try Next Cycle"]
-    N["🔗 HTTP End<br/>Close Connection"]
-    O["🖨️ Print Result<br/>Serial Monitor"]
-    Z["⏭️ Skip Cycle"]
-    P["😴 vTaskDelay 15000ms"]
-    Q["🔄 Loop Back"]
+    A[IOT TASK START Core 1 Priority 1]
+    B[Queue Receive xQueueReceive timeout]
+    C{Data Received?}
+    D[Check WiFi WiFi.status]
+    E{WiFi Connected?}
+    F[Log WiFi Error]
+    G[Get API Key From EEPROM]
+    H[Build ThingSpeak URL 4 Fields + Value]
+    I[HTTP Client Begin GET Request]
+    J[Send HTTP Request Start Timer]
+    K{HTTP Response OK?}
+    L[Entry ID Received]
+    M[Log Error Try Next Cycle]
+    N[HTTP End Close Connection]
+    O[Print Result Serial Monitor]
+    Z[Skip Cycle]
+    P[vTaskDelay 15000ms]
+    Q[Loop Back]
     
     A --> B
     B --> C
@@ -501,47 +501,35 @@ flowchart TD
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Boot: Power On
-    Boot --> Initialize: Setup Hardware
-    Initialize --> WiFiConfig: Check EEPROM
+    [*] --> Boot
+    Boot --> Initialize
+    Initialize --> WiFiConfig
     
     WiFiConfig --> WiFiReady: Credentials Found
-    WiFiConfig --> APMode: First Boot/Error
+    WiFiConfig --> APMode: First Boot or Error
     
-    APMode --> Portal: Start 192.168.4.1
+    APMode --> Portal
     Portal --> WiFiReady: User Configure
     
-    WiFiReady --> CreatingTasks: WiFi Connected ✅
-    CreatingTasks --> SystemReady: Mutex & Queue OK
+    WiFiReady --> CreatingTasks: WiFi Connected
+    CreatingTasks --> SystemReady: Mutex and Queue OK
     
-    SystemReady --> Running: Start Tasks
+    SystemReady --> Running
     
-    Running --> SensorRead: Core 0 Cycle
-    SensorRead --> QueueSend: Data Ready
-    QueueSend --> IoTRead: Queue Available
+    Running --> SensorRead
+    SensorRead --> QueueSend
+    QueueSend --> IoTRead
     
-    IoTRead --> WiFiCheck: Core 1 Active
+    IoTRead --> WiFiCheck
     WiFiCheck --> Upload: WiFi OK
     WiFiCheck --> Wait: WiFi Failed
     
-    Upload --> Cloud: HTTP Success
+    Upload --> Cloud
     Cloud --> Running
     Wait --> Running
     
     Running --> Error: WiFi Lost
-    Error --> WiFiConfig: Reconnect
-    
-    note right of SensorRead
-        Every 2 seconds
-        MQ135, LM35, DHT22, LDR
-        LED Toggle
-    end note
-    
-    note right of IoTRead
-        Every 15 seconds
-        ThingSpeak 4 Fields
-        HTTP POST
-    end note
+    Error --> WiFiConfig
 ```
 
 ---
