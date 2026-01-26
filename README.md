@@ -15,8 +15,6 @@
 
 *Sistem monitoring lingkungan real-time dengan multi-sensor, FreeRTOS multi-task, dan cloud IoT integration*
 
-**📍 Indonesia** | **🗓️ Updated January 27, 2026**
-
 </div>
 
 ---
@@ -403,7 +401,7 @@ Time  | Action                              | Duration
 2ms   | Read MQ-135 GPIO35 ADC, 20x avg     | 20ms
 22ms  | Read LM35 GPIO32 ADC, convert       | 10ms
 32ms  | Read DHT22 GPIO27 I2C               | 30ms
-62ms  | Read LDR GPIO34 ADC, map 0-100%    | 10ms
+62ms  | Read LDR GPIO34 ADC, map 0-100%     | 10ms
 72ms  | Sensor Fusion (avg temp)            | 10ms
 82ms  | Toggle LED GPIO33                   | 1ms
 83ms  | Prepare SensorData struct           | 5ms
@@ -411,7 +409,7 @@ Time  | Action                              | Duration
 89ms  | Unlock Mutex                        | 1ms
 90ms  | Print debug to Serial               | 10ms
 100ms | xTaskDelay 2000ms                   | 1900ms
-------|                              TOTAL   | 2000ms
+------|                              TOTAL  | 2000ms
 ```
 
 **Core 1 - IoT Task Execution (Priority 1, Every 15 seconds):**
@@ -432,7 +430,7 @@ Time   | Action                              | Duration
 3052ms | HTTPClient.end() (close)            | 1ms
 3053ms | Print result to Serial              | 10ms
 3063ms | xTaskDelay 15000ms                  | 11937ms
--------|                              TOTAL   | 15000ms
+-------|                              TOTAL  | 15000ms
 ```
 
 **System State Transitions:**
@@ -656,16 +654,16 @@ TIME   CORE 0 (Sensor Task)          CORE 1 (IoT Task)
 ----   ───────────────────────────   ──────────────────────
 0s     [Start] Read Sensors          [Idle] Waiting...
 2s     [Queue] Send data ────────→   [Receive] Get data
-                                    [Process] Build URL
-                                    [HTTP] POST request...
+                                     [Process] Build URL
+                                     [HTTP] POST request...
 5s     [Start] Read Sensors          [Processing] HTTP...
 7s     [Queue] Send data             [Response] Success ✓
 10s    [Start] Read Sensors          [Log] Entry stored
 12s    [Queue] Send data             [Sleep] Idle...
 14s    [Start] Read Sensors          [Idle] Waiting...
 15s    [Queue] Send data ────────→   [Receive] Get data
-                                    [Process] Build URL
-                                    [HTTP] POST request...
+                                     [Process] Build URL
+                                     [HTTP] POST request...
 18s    [Start] Read Sensors          [Processing] HTTP...
 20s    [Queue] Send data             [Response] Success ✓
 22s    [Start] Read Sensors          [Log] Entry stored
@@ -705,45 +703,45 @@ Utilization: ~27.5%
 ### Software Architecture Layers
 
 ```
-┌──────────────────────────────────────────────┐
-│  APPLICATION LAYER                           │
+┌─────────────────────────────────────────────┐
+│  APPLICATION LAYER                          │
 │  ┌────────────────────────────────────────┐ │
 │  │  main.ino (setup & loop)               │ │
 │  │  sensorTask() - Core 0                 │ │
 │  │  iotTask() - Core 1                    │ │
 │  │  Serial Monitor output                 │ │
 │  └────────────────────────────────────────┘ │
-└──────────────────────────────────────────────┘
+└─────────────────────────────────────────────┘
          ↓
-┌──────────────────────────────────────────────┐
-│  FREERTOS RTOS LAYER                         │
+┌─────────────────────────────────────────────┐
+│  FREERTOS RTOS LAYER                        │
 │  ┌────────────────────────────────────────┐ │
 │  │  Task Scheduler (xTaskCreate)          │ │
 │  │  Queue Management (xQueueCreate)       │ │
 │  │  Mutex/Semaphore (xSemaphore)          │ │
 │  │  Timer Management (vTaskDelay)         │ │
 │  └────────────────────────────────────────┘ │
-└──────────────────────────────────────────────┘
+└─────────────────────────────────────────────┘
          ↓
-┌──────────────────────────────────────────────┐
-│  HAL (Hardware Abstraction Layer)            │
+┌─────────────────────────────────────────────┐
+│  HAL (Hardware Abstraction Layer)           │
 │  ┌────────────────────────────────────────┐ │
 │  │  analogRead()  - ADC Driver            │ │
 │  │  digitalWrite() - GPIO Driver          │ │
 │  │  Wire.begin() - I2C Driver             │ │
 │  │  WiFi.begin() - WiFi Driver            │ │
 │  └────────────────────────────────────────┘ │
-└──────────────────────────────────────────────┘
+└─────────────────────────────────────────────┘
          ↓
-┌──────────────────────────────────────────────┐
-│  HARDWARE LAYER                              │
+┌─────────────────────────────────────────────┐
+│  HARDWARE LAYER                             │
 │  ┌────────────────────────────────────────┐ │
 │  │  ADC Peripheral (12-bit)               │ │
 │  │  GPIO Controller (34 pins)             │ │
 │  │  I2C Interface (Bus 0)                 │ │
-│  │  WiFi Radio (802.11 b/g/n)            │ │
+│  │  WiFi Radio (802.11 b/g/n)             │ │
 │  └────────────────────────────────────────┘ │
-└──────────────────────────────────────────────┘
+└─────────────────────────────────────────────┘
 ```
 
 ```cpp
@@ -1014,13 +1012,19 @@ TOTAL LATENCY: ~3.6 seconds
 
 ### Task Execution Performance
 
-```mermaid
-xychart-beta
-    title Task Cycle Times (Microseconds)
-    x-axis [MQ135, LM35, DHT22, LDR, Process, Queue, Total]
-    y-axis "Time (μs)" 0 --> 100000
-    line [20000, 10000, 30000, 10000, 10000, 1000, 81000]
-```
+| Task Component | Time (ms) | Percentage of Cycle |
+|---|---|---|
+| MQ-135 Read (20x avg) | 20 | 2.5% |
+| LM35 Read + Convert | 10 | 1.25% |
+| DHT22 Read (I2C) | 30 | 3.75% |
+| LDR Read + Map | 10 | 1.25% |
+| Data Fusion | 10 | 1.25% |
+| LED Toggle | 1 | 0.1% |
+| Struct Prepare | 5 | 0.6% |
+| Queue Send | 1 | 0.1% |
+| **Total Active Processing** | **87** | **10.9%** |
+| **Sleep/Idle** | **1913** | **89.1%** |
+| **Complete Cycle** | **2000** | **100%** |
 
 ### Memory Distribution
 
@@ -1038,15 +1042,18 @@ pie title ESP32 SRAM Usage (320KB Total)
 
 ### Power Consumption Profile
 
-```mermaid
-xychart-beta
-    title Power Consumption Cycle
-    x-axis [Idle, Sensor<br/>Active, WiFi<br/>Idle, HTTP<br/>POST, Complete<br/>Cycle]
-    y-axis "Current (mA)" 0 --> 250
-    line [50, 120, 100, 180, 85]
-    
-    note Power consumption varies with WiFi signal strength
-```
+**Current Draw by Operating State:**
+
+| Operating State | Current @ 5V | Notes |
+|---|---|---|
+| **Idle** (No WiFi) | 50 mA | Core 0/1 idle, minimal clocking |
+| **Sensor Active** | 120 mA | ADC/I2C active, WiFi off |
+| **WiFi Connected** | 100 mA | WiFi radio active, no transmission |
+| **HTTP Transfer** | 180-200 mA | Peak current during upload |
+| **15-Second Average** | 80-100 mA | Weighted average over full cycle |
+| **Daily Usage** | ~2 Wh | Assuming continuous operation |
+
+**Power varies with WiFi signal strength; closer proximity reduces TX power and current draw.**
 
 ### Performance Characteristics Table
 
@@ -1139,14 +1146,6 @@ graph LR
 ## 📄 License
 
 This project is licensed under the MIT License - see LICENSE file for details.
-
----
-
-## 👨‍💻 Author
-
-**Real-Time Environmental Sentinel Development**
-- 📍 Indonesia
-- 🗓️ January 2026
 
 ---
 
