@@ -156,7 +156,7 @@ graph TB
 
 ---
 
-## Arsitektur Sistem
+## 🏗️ Arsitektur Sistem
 
 ### Diagram Blok Sistem
 
