@@ -25,7 +25,7 @@
 
 - [✨ Features](#-features)
 - [🧩 Komponen Utama](#-komponen-utama)
-- [🏗️ Arsitektur Sistem](#-Arsitektur-Sistem)
+- [🏗️ Arsitektur Sistem](#-arsitektur-sistem)
 - [🔄 Alur Kerja Sistem](#-alur-kerja-sistem)
 - [📁 Struktur Project](#-struktur-project)
 - [🚀 Quick Start](#-quick-start)
